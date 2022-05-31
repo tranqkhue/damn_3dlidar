@@ -97,6 +97,10 @@ def cal_z_grad(organized_xyz):
     # Calculation of Sobely (1,0)
     sobely = cv2.Sobel(z_matrix,cv2.CV_64F,dx=1,dy=0,ksize=5)
     
+    # Return absolute gradient value
+    sobelx = np.abs(sobelx)
+    sobely = np.abs(sobely)
+    
     return sobelx, sobely
 
 #------------------------------------------------------------------------------
@@ -116,12 +120,12 @@ def callback_ptcloud(ptcloud_data):
     sobel_intra_ring, sobel_inter_ring = cal_z_grad(pts_organized)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
-    sobel_intra_ring = np.clip(sobel_intra_ring, a_min=-0.1, a_max=0.1)
+    sobel_intra_ring = np.clip(sobel_intra_ring, a_min=0.0, a_max=0.15)
     msg = pts_np_to_pclmsg(pts_organized, sobel_intra_ring, "laser")
     pts_x_publisher.publish(msg)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
-    sobel_inter_ring = np.clip(sobel_inter_ring, a_min=-0.1, a_max=0.1)
+    sobel_inter_ring = np.clip(sobel_inter_ring, a_min=0.0, a_max=5)
     msg = pts_np_to_pclmsg(pts_organized, sobel_inter_ring, "laser")
     pts_y_publisher.publish(msg)
     #--------------------------------------------------------------------------
