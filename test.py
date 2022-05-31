@@ -46,11 +46,17 @@ def equirectangular_viz(organized_xyz):
     distanced = np.linalg.norm(nonan, axis=2)
     
     # Normalize to 0->255 for visualization
-    normed = (distanced - np.min(distanced))/(np.max(distanced) - np.min(distanced)) * 255.0
+    MAX_RANGE = 40
+    clipped = np.clip(distanced, 0, MAX_RANGE)
+    normed = (clipped - 0)/(MAX_RANGE) * 256.0
+    #normed = (distanced - 0)/(30 - 0) * 255.0
     normed = normed.astype(np.uint8)
     normed = normed.transpose()
-    viz = cv2.resize(normed, (0,0), fx=0.3, fy=2.5)
-    cv2.imshow('viz', viz)
+    flipped = np.flip(normed, 0)
+    
+    viz = cv2.resize(flipped, (0,0), fx=0.3, fy=3.5)
+    vizC = cv2.applyColorMap(viz, cv2.COLORMAP_JET)
+    cv2.imshow('viz', vizC)
     cv2.waitKey(1)
     
 def sorting(pts):
