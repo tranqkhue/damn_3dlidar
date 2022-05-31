@@ -10,9 +10,8 @@ import numpy as np
 import cv2
 
 import rospy
-from sensor_msgs.msg import PointField as PointField
-from std_msgs.msg import Header as Header
-import sensor_msgs.point_cloud2 as pc2
+import ros_numpy # Convert ROS messages into Numpy array
+
 from sensor_msgs.msg import PointCloud2
 
 # Dimensions: first channel is lidar firing, second channel is physical axes!
@@ -20,24 +19,17 @@ from sensor_msgs.msg import PointCloud2
 #------------------------------------------------------------------------------
 # ROS operations
 
-def pts_np_to_pclmsg(points, intensity, frame):
-    header = Header()
-    header.frame_id=frame
+def pts_np_to_pclmsg(pts, intensity, frame):
+    d = np.dtype([('x', np.float32), ('y', np.float32), ('z', np.float32), 
+                  ('intensity', np.float32)])
+    struc_arr = np.zeros(pts.shape[0:-1], d)
+    struc_arr['x'] = pts[:,:,0]
+    struc_arr['y'] = pts[:,:,1]
+    struc_arr['z'] = pts[:,:,2]
+    struc_arr['intensity'] = intensity
     
-    fields = [
-        PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-        PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-        PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
-        PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
-        ]
-    
-    points = np.reshape(points, (-1,3))
-    normalized_intensity = (intensity - np.min(intensity))/ \
-                           (np.max(intensity) - np.min(intensity))
-    normalized_intensity = np.reshape(normalized_intensity, (-1,1))
-    points = np.hstack((points, normalized_intensity))
-    
-    msg = pc2.create_cloud(header, fields, points)
+    msg = ros_numpy.msgify(PointCloud2, struc_arr, frame_id=frame)
+
     return msg
 
 #------------------------------------------------------------------------------
@@ -96,7 +88,7 @@ def cal_z_grad(organized_xyz):
     sobelx = cv2.Sobel(z_matrix,cv2.CV_64F,dx=0,dy=1,ksize=5)
     # Calculation of Sobely (1,0)
     sobely = cv2.Sobel(z_matrix,cv2.CV_64F,dx=1,dy=0,ksize=5)
-    
+  
     # Return absolute gradient value
     sobelx = np.abs(sobelx)
     sobely = np.abs(sobely)
@@ -106,10 +98,9 @@ def cal_z_grad(organized_xyz):
 #------------------------------------------------------------------------------
     
 def callback_ptcloud(ptcloud_data):
-    xd = list(pc2.read_points(ptcloud_data, skip_nans=False))
-    pc = np.asarray(xd)
-    # [x,y,z]
-    pts = pc[:,:3]
+    data = ros_numpy.numpify(ptcloud_data)
+    pts  = np.array([data['x'], data['y'], data['z']])
+    pts  = np.moveaxis(pts, 0, 2)
     
     pts_organized = organizing(pts)
     # equirectangular_viz(pts_organized)
@@ -120,12 +111,12 @@ def callback_ptcloud(ptcloud_data):
     sobel_intra_ring, sobel_inter_ring = cal_z_grad(pts_organized)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
-    sobel_intra_ring = np.clip(sobel_intra_ring, a_min=0.0, a_max=0.15)
+    sobel_intra_ring = np.clip(sobel_intra_ring, a_min=0.0, a_max=0.1)
     msg = pts_np_to_pclmsg(pts_organized, sobel_intra_ring, "laser")
     pts_x_publisher.publish(msg)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
-    sobel_inter_ring = np.clip(sobel_inter_ring, a_min=0.0, a_max=5)
+    sobel_inter_ring = np.clip(sobel_inter_ring, a_min=0.0, a_max=0.1)
     msg = pts_np_to_pclmsg(pts_organized, sobel_inter_ring, "laser")
     pts_y_publisher.publish(msg)
     #--------------------------------------------------------------------------
