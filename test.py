@@ -110,17 +110,21 @@ def callback_ptcloud(ptcloud_data):
     pts_organized = organizing(pts)
     # equirectangular_viz(pts_organized)
 
-    sobelx, sobely = cal_z_grad(pts_organized)
+    #--------------------------------------------------------------------------
+    # Calculate gradient by delta_z
+
+    sobel_intra_ring, sobel_inter_ring = cal_z_grad(pts_organized)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
-    sobelx = np.clip(sobelx, a_min=-0.1, a_max=0.1)
-    msg = pts_np_to_pclmsg(pts_organized, sobelx, "laser")
+    sobel_intra_ring = np.clip(sobel_intra_ring, a_min=-0.1, a_max=0.1)
+    msg = pts_np_to_pclmsg(pts_organized, sobel_intra_ring, "laser")
     pts_x_publisher.publish(msg)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
-    sobely = np.clip(sobely, a_min=-0.1, a_max=0.1)
-    msg = pts_np_to_pclmsg(pts_organized, sobely, "laser")
+    sobel_inter_ring = np.clip(sobel_inter_ring, a_min=-0.1, a_max=0.1)
+    msg = pts_np_to_pclmsg(pts_organized, sobel_inter_ring, "laser")
     pts_y_publisher.publish(msg)
+    #--------------------------------------------------------------------------
 
 
 #------------------------------------------------------------------------------
@@ -128,9 +132,9 @@ def callback_ptcloud(ptcloud_data):
 if (__name__ == "__main__"):
     try:
         rospy.init_node("test_lidar", anonymous=True)
-        pts_x_publisher = rospy.Publisher('/test_points_x', PointCloud2,\
+        pts_x_publisher = rospy.Publisher('/sobel_z_intra_ring', PointCloud2,\
                                         queue_size=1)
-        pts_y_publisher = rospy.Publisher('/test_points_y', PointCloud2,\
+        pts_y_publisher = rospy.Publisher('/sobel_z_inter_ring', PointCloud2,\
                                         queue_size=1)
         rospy.Subscriber("/velodyne_points", PointCloud2, callback_ptcloud, \
                          queue_size=1)
