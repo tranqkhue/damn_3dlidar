@@ -8,6 +8,7 @@ Created on Fri May 27 00:56:26 2022
 #!/usr/bin/env python
 import numpy as np
 import cv2
+import ros_numpy
 
 import rospy
 from sensor_msgs.msg import PointField as PointField
@@ -24,20 +25,18 @@ def pts_np_to_pclmsg(points, intensity, frame):
     header = Header()
     header.frame_id=frame
     
-    fields = [
-        PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-        PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-        PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
-        PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
-        ]
-    
-    points = np.reshape(points, (-1,3))
+    a = np.recarray((points.shape[0],points.shape[1]),dtype = [("x", np.float32), 
+                                                ("y", np.float32), 
+                                                ("z", np.float32),("intensity",np.float32)])
+    a["x"] = points[:,:,0]                                                              
+    a["y"] = points[:,:,1]                                                              
+    a["z"] = points[:,:,2]    
     normalized_intensity = (intensity - np.min(intensity))/ \
                            (np.max(intensity) - np.min(intensity))
     normalized_intensity = np.reshape(normalized_intensity, (-1,1))
-    points = np.hstack((points, normalized_intensity))
-    
-    msg = pc2.create_cloud(header, fields, points)
+    a["intensity"] = intensity
+    msg = ros_numpy.msgify(PointCloud2,a)
+    msg.header = header
     return msg
 
 #------------------------------------------------------------------------------
@@ -106,27 +105,26 @@ def cal_z_grad(organized_xyz):
 #------------------------------------------------------------------------------
     
 def callback_ptcloud(ptcloud_data):
-    xd = list(pc2.read_points(ptcloud_data, skip_nans=False))
-    pc = np.asarray(xd)
-    # [x,y,z]
-    pts = pc[:,:3]
-    
-    pts_organized = organizing(pts)
+    pc = ros_numpy.numpify(ptcloud_data)
+    pc_numpy = np.zeros((pc.shape[0],pc.shape[1],3))
+    pc_numpy[:,:,0] = pc["x"]
+    pc_numpy[:,:,1] = pc["y"]
+    pc_numpy[:,:,2] = pc["z"]
     # equirectangular_viz(pts_organized)
 
     #--------------------------------------------------------------------------
     # Calculate gradient by delta_z
 
-    sobel_intra_ring, sobel_inter_ring = cal_z_grad(pts_organized)
+    sobel_intra_ring, sobel_inter_ring = cal_z_grad(pc_numpy)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
     sobel_intra_ring = np.clip(sobel_intra_ring, a_min=0.0, a_max=0.15)
-    msg = pts_np_to_pclmsg(pts_organized, sobel_intra_ring, "laser")
+    msg = pts_np_to_pclmsg(pc_numpy, sobel_intra_ring, "laser")
     pts_x_publisher.publish(msg)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
     sobel_inter_ring = np.clip(sobel_inter_ring, a_min=0.0, a_max=5)
-    msg = pts_np_to_pclmsg(pts_organized, sobel_inter_ring, "laser")
+    msg = pts_np_to_pclmsg(pc_numpy, sobel_inter_ring, "laser")
     pts_y_publisher.publish(msg)
     #--------------------------------------------------------------------------
 
