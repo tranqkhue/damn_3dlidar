@@ -61,8 +61,11 @@ def callback_ptcloud(ptcloud_data):
     global a
     a = pts
 
-    pts[:, :, 2] = np.nan_to_num(pts[:, :, 2],       0)
-    pts[:, :, 0] = np.nan_to_num(pts[:, :, 0], 9999999)
+    # Handle nan. Since tan=(Opposite Side/Adjacent side), and small angle would be deprecated anyway
+    pts[:, :, 2] = np.nan_to_num(pts[:, :, 2],       0) # z, or opposite side
+    pts[:, :, 1] = np.nan_to_num(pts[:, :, 1], 9999999) # y, a component of adjacent side
+    pts[:, :, 0] = np.nan_to_num(pts[:, :, 0], 9999999) # x, a component of adjacent side
+
     pts[:, :, 2] = savgol_filter(pts[:, :, 2], window_length=5, polyorder=4, axis=1)
 
     b = a[:, 0:31, :]
@@ -72,6 +75,10 @@ def callback_ptcloud(ptcloud_data):
     r1 = np.linalg.norm(c[:,:,0:2], axis=2)
     test_angle = np.arctan2((c[:,:,2]-b[:,:,2]),(r1-r0))
     degrees_angle = np.abs(np.degrees(test_angle))
+
+    # FOR TESTING ONLY! MAY CONFLICT WITH ROS CALLBACK
+    # plt.hist(degrees_angle)
+    # plt.show()
 
     ANGLE_RANGE = 120
     mask_2d = np.bitwise_and(degrees_angle>(90-ANGLE_RANGE/2), \
