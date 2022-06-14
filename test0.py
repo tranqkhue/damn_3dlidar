@@ -8,6 +8,8 @@ Created on Fri May 27 00:56:26 2022
 #!/usr/bin/env python
 import numpy as np
 import cv2
+import scipy
+from scipy import ndimage
 
 import rospy
 import ros_numpy # Convert ROS messages into Numpy array
@@ -83,11 +85,32 @@ def organizing(pts):
 def cal_z_grad(organized_xyz):
     nonan_organized_xyz = np.nan_to_num(organized_xyz)
     z_matrix = nonan_organized_xyz[:,:,2]
+    z_matrix = scipy.ndimage.median_filter(z_matrix, size=(10,1))
     # NOTE: Image frame is tranposed and flipped to the numpy pointcloud array!
+    
     # Calculation of Sobely (0,1)
     sobelx = cv2.Sobel(z_matrix,cv2.CV_64F,dx=0,dy=1,ksize=5)
     # Calculation of Sobely (1,0)
     sobely = cv2.Sobel(z_matrix,cv2.CV_64F,dx=1,dy=0,ksize=5)
+    # Return absolute gradient value
+    sobelx = np.abs(sobelx)
+    sobely = np.abs(sobely)
+    
+    return sobelx, sobely
+     
+def cal_xy_projected_grad(organized_xyz):
+    nonan_organized_xyz = np.nan_to_num(organized_xyz, nan=1000)
+    nonan_organized_xyz = scipy.ndimage.median_filter(nonan_organized_xyz, size=(5,1,1))
+    # nonan_organized_xyz = cv2.GaussianBlur(nonan_organized_xyz,(69,1),0)
+
+    xy_projected = np.sqrt(nonan_organized_xyz[:,:,0]**2 + nonan_organized_xyz[:,:,1]**2) / \
+                   np.sqrt(nonan_organized_xyz[:,:,0]**2 + nonan_organized_xyz[:,:,1]**2 + nonan_organized_xyz[:,:,2]**2)
+    
+    # Calculation of Sobely (0,1)
+    sobelx = cv2.Sobel(xy_projected,cv2.CV_64F,dx=0,dy=1,ksize=3)
+    
+    # Calculation of Sobely (1,0)
+    sobely = cv2.Sobel(xy_projected,cv2.CV_64F,dx=1,dy=0,ksize=5)
   
     # Return absolute gradient value
     sobelx = np.abs(sobelx)
@@ -102,21 +125,23 @@ def callback_ptcloud(ptcloud_data):
     pts  = np.array([data['x'], data['y'], data['z']])
     pts  = np.moveaxis(pts, 0, 2)
     
+    global pts_organized
     pts_organized = organizing(pts)
     # equirectangular_viz(pts_organized)
 
     #--------------------------------------------------------------------------
     # Calculate gradient by delta_z
 
+    # cal_z_grad(pts_organized)
     sobel_intra_ring, sobel_inter_ring = cal_z_grad(pts_organized)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
-    sobel_intra_ring = np.clip(sobel_intra_ring, a_min=0.0, a_max=0.1)
+    sobel_intra_ring = np.clip(sobel_intra_ring, a_min=0.0, a_max=0.5)
     msg = pts_np_to_pclmsg(pts_organized, sobel_intra_ring, "laser")
     pts_x_publisher.publish(msg)
     
     # PLEASE MODIFY CLIP RANGE IF NEEDED!
-    sobel_inter_ring = np.clip(sobel_inter_ring, a_min=0.0, a_max=0.1)
+    sobel_inter_ring = np.clip(sobel_inter_ring, a_min=0.1, a_max=4)
     msg = pts_np_to_pclmsg(pts_organized, sobel_inter_ring, "laser")
     pts_y_publisher.publish(msg)
     #--------------------------------------------------------------------------
