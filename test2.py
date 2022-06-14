@@ -61,7 +61,9 @@ def callback_ptcloud(ptcloud_data):
     global a
     a = pts
 
-    a = savgol_filter(a, window_length=5, polyorder=4, axis=1)
+    pts[:, :, 2] = np.nan_to_num(pts[:, :, 2],       0)
+    pts[:, :, 0] = np.nan_to_num(pts[:, :, 0], 9999999)
+    pts[:, :, 2] = savgol_filter(pts[:, :, 2], window_length=5, polyorder=4, axis=1)
 
     b = a[:, 0:31, :]
     c = a[:, 1:32, :]
@@ -70,7 +72,9 @@ def callback_ptcloud(ptcloud_data):
     global degrees_angle 
     degrees_angle = np.abs(np.degrees(test_angle))
 
-    mask_2d = np.bitwise_and(150>degrees_angle, 30<degrees_angle)
+    ANGLE_RANGE = 120
+    mask_2d = np.bitwise_and(degrees_angle>(90-ANGLE_RANGE/2), \
+                             degrees_angle<(90+ANGLE_RANGE/2))
     #mask_2d = 130>degrees_angle>50
 
     global mask_3d
@@ -79,7 +83,8 @@ def callback_ptcloud(ptcloud_data):
     global out
     out = np.where(mask_3d, pts[:, 1:32, :], np.nan)
 
-    intensity = data['intensity'][:, 1:32]
+    # intensity = data['intensity'][:, 1:32]
+    intensity = degrees_angle
     msg = pts_np_to_pclmsg(out, intensity=intensity)
     gnd_publisher.publish(msg)
 
