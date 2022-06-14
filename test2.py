@@ -68,8 +68,9 @@ def callback_ptcloud(ptcloud_data):
     b = a[:, 0:31, :]
     c = a[:, 1:32, :]
 
-    test_angle = np.arctan2((c[:,:,2]-b[:,:,2]),(c[:,:,0]-b[:,:,0]))
-    global degrees_angle 
+    r0 = np.linalg.norm(b[:,:,0:2], axis=2)
+    r1 = np.linalg.norm(c[:,:,0:2], axis=2)
+    test_angle = np.arctan2((c[:,:,2]-b[:,:,2]),(r1-r0))
     degrees_angle = np.abs(np.degrees(test_angle))
 
     ANGLE_RANGE = 120
