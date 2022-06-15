@@ -40,19 +40,19 @@ def pts_np_to_pclmsg(pts, frame="laser", intensity=255):
     
 def callback_ptcloud(ptcloud_data):
     data = ros_numpy.numpify(ptcloud_data)
-    global pts
     pts  = np.array([data['x'], data['y'], data['z']])
     # intensity = np.array(data['intensity'])
     pts  = np.moveaxis(pts, 0, 2)
     
     # Filter (smoothing) z value by column (or multiple ring in the same azimuth)
-    # pts[:, :, 2] = savgol_filter(pts[:, :, 2], window_length=5, polyorder=3, axis=1)
+    pts[:, :, 2] = savgol_filter(pts[:, :, 2], window_length=5, polyorder=3, axis=1)
     
     z0 = pts[:, 0:31, 2]
     z1 = pts[:, 1:32, 2]
 
-    r0 = np.linalg.norm(pts[:, 0:31, 0:2], axis=2)
-    r1 = np.linalg.norm(pts[:, 1:32, 0:2], axis=2)
+    r  = np.linalg.norm(pts[:, :, 0:2], axis=2)
+    r0 = r[:, 0:31]
+    r1 = r[:, 1:32]
 
     angle = np.arctan2((z1-z0),(r1-r0))
     degrees_angle = np.abs(np.degrees(angle))
