@@ -66,21 +66,18 @@ def callback_ptcloud(ptcloud_data):
     r1 = r[:, 1:32]
 
     angle = np.arctan2((z1-z0),(r1-r0))
-    degrees_angle = np.abs(np.degrees(angle))
 
     # FOR TESTING ONLY! MAY CONFLICT WITH ROS CALLBACK
     # plt.hist(degrees_angle)
     # plt.show()
 
-    OBSTACLE_SLOPE_ANGLE_RANGE = 110 # degree
-    mask_2d = np.bitwise_and(degrees_angle>(90-OBSTACLE_SLOPE_ANGLE_RANGE/2), \
-                             degrees_angle<(90+OBSTACLE_SLOPE_ANGLE_RANGE/2))
+    mask_2d = np.bitwise_and(angle>min_angle, angle<max_angle)
     mask_3d = np.repeat(mask_2d.reshape(-1, 31, 1), 3, axis=2)
 
     # Ground removed
     ground_removed = np.ma.where(mask_3d, pts[:, 1:32, :], np.nan)
     # intensity = data['intensity'][:, 1:32]
-    intensity = degrees_angle
+    intensity = angle
     msg = pts_np_to_pclmsg(ground_removed, intensity=intensity)
     ground_removed_publisher.publish(msg)
 
@@ -90,7 +87,9 @@ def callback_ptcloud(ptcloud_data):
     ground_seperated_publisher.publish(msg)
 
 #------------------------------------------------------------------------------
-
+OBSTACLE_SLOPE_ANGLE_RANGE = 1.91986218 # rad
+min_angle = 1.57079633 - OBSTACLE_SLOPE_ANGLE_RANGE/2
+max_angle = 1.57079633 + OBSTACLE_SLOPE_ANGLE_RANGE/2
 if (__name__ == "__main__"):
     try:
         rospy.init_node("test_lidar", anonymous=True)
