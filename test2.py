@@ -5,6 +5,11 @@ Created on Fri May 27 00:56:26 2022
 
 @author: tranquockhue
 """
+
+# Fixing the OpenBLAS threading issue
+import os
+os.environ["OPENBLAS_NUM_THREADS"] = "1" 
+
 #!/usr/bin/env python
 import numpy as np
 import cv2
@@ -17,8 +22,6 @@ import ros_numpy # Convert ROS messages into Numpy array
 from sensor_msgs.msg import PointCloud2
 
 # import matplotlib.pyplot as plt
-
-# Dimensions: first channel is lidar firing, second channel is physical axes!
 
 #------------------------------------------------------------------------------
 # ROS operations
@@ -44,6 +47,14 @@ def callback_ptcloud(ptcloud_data):
     # intensity = np.array(data['intensity'])
     pts  = np.moveaxis(pts, 0, 2)
     
+    # !!! We just leave numpy and OpenBLAS to handle nan themselves
+    # Handle nan. Since tan=(Opposite Side/Adjacent side), and small angle would be deprecated anyway
+    # pts[:, :, 2] = np.nan_to_num(pts[:, :, 2],       0) # z, or opposite side
+    # pts[:, :, 1] = np.nan_to_num(pts[:, :, 1], 9999999) # y, a component of adjacent side
+    # pts[:, :, 0] = np.nan_to_num(pts[:, :, 0], 9999999) # x, a component of adjacent side
+    # mask = np.isnan(pts[:, :, 2])
+    # pts[mask, 2] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), pts[~mask, 2])
+
     # Filter (smoothing) z value by column (or multiple ring in the same azimuth)
     pts[:, :, 2] = savgol_filter(pts[:, :, 2], window_length=5, polyorder=3, axis=1)
     
@@ -61,7 +72,7 @@ def callback_ptcloud(ptcloud_data):
     # plt.hist(degrees_angle)
     # plt.show()
 
-    OBSTACLE_SLOPE_ANGLE_RANGE = 120 # degree
+    OBSTACLE_SLOPE_ANGLE_RANGE = 100 # degree
     mask_2d = np.bitwise_and(degrees_angle>(90-OBSTACLE_SLOPE_ANGLE_RANGE/2), \
                              degrees_angle<(90+OBSTACLE_SLOPE_ANGLE_RANGE/2))
     mask_3d = np.repeat(mask_2d.reshape(-1, 31, 1), 3, axis=2)
