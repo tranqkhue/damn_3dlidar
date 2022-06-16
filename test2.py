@@ -72,7 +72,7 @@ def callback_ptcloud(ptcloud_data):
     # plt.hist(degrees_angle)
     # plt.show()
 
-    OBSTACLE_SLOPE_ANGLE_RANGE = 100 # degree
+    OBSTACLE_SLOPE_ANGLE_RANGE = 110 # degree
     mask_2d = np.bitwise_and(degrees_angle>(90-OBSTACLE_SLOPE_ANGLE_RANGE/2), \
                              degrees_angle<(90+OBSTACLE_SLOPE_ANGLE_RANGE/2))
     mask_3d = np.repeat(mask_2d.reshape(-1, 31, 1), 3, axis=2)
