@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Fri May 27 00:56:26 2022
 
-@author: tranquockhue
-"""
+
 
 # Fixing the OpenBLAS threading issue
 import os
-os.environ["OPENBLAS_NUM_THREADS"] = "1" 
+# For OpenBLAS
+# os.environ["OPENBLAS_NUM_THREADS"] = "1" 
+# For Intel MKL
+os.environ["MKL_NUM_THREADS"] = "1" 
 
 #!/usr/bin/env python
 import numpy as np
@@ -54,6 +54,10 @@ def callback_ptcloud(ptcloud_data):
     # pts[:, :, 0] = np.nan_to_num(pts[:, :, 0], 9999999) # x, a component of adjacent side
     # mask = np.isnan(pts[:, :, 2])
     # pts[mask, 2] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), pts[~mask, 2])
+
+    # Remove NaN value
+    # NOTE: MUST REMOVE NAN VALUE FOR INTEL MKL LIBRARY OR DIVERGENCE ERROR!
+    pts = pts[~np.isnan(pts).any(axis=(2,1))]
 
     # Filter (smoothing) z value by column (or multiple ring in the same azimuth)
     pts[:, :, 2] = savgol_filter(pts[:, :, 2], window_length=5, polyorder=3, axis=1)

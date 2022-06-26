@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Fri May 27 00:56:26 2022
 
-@author: tranquockhue
-"""
+
 
 # Fixing the OpenBLAS threading issue
 import os
-os.environ["OPENBLAS_NUM_THREADS"] = "1" 
+# For OpenBLAS
+# os.environ["OPENBLAS_NUM_THREADS"] = "1" 
+# For Intel MKL
+os.environ["MKL_NUM_THREADS"] = "1" 
 
 #!/usr/bin/env python
 import numpy as np
@@ -55,6 +55,9 @@ def callback_ptcloud(ptcloud_data):
     # mask = np.isnan(pts[:, :, 2])
     # pts[mask, 2] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), pts[~mask, 2])
 
+    # Remove NaN value
+    pts = pts[~np.isnan(pts).any(axis=(2,1))]
+
     # Filter (smoothing) z value by column (or multiple ring in the same azimuth)
     pts[:, :, 2] = savgol_filter(pts[:, :, 2], window_length=5, polyorder=3, axis=1)
     
@@ -86,6 +89,11 @@ def callback_ptcloud(ptcloud_data):
     ground = np.ma.where(np.bitwise_not(mask_3d), pts[:, 1:32, :], np.nan)
     msg = pts_np_to_pclmsg(ground, intensity=intensity)
     ground_seperated_publisher.publish(msg)
+
+    # Assumed ground takes account mostly of nearest ring. Perform Plane regression
+    first_ring = pts[:, 0, :]
+    global a
+    a = first_ring
 
 #------------------------------------------------------------------------------
 OBSTACLE_SLOPE_ANGLE_RANGE = 1.04719755  # rad
