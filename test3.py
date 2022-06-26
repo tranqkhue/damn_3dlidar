@@ -74,6 +74,7 @@ def callback_ptcloud(ptcloud_data):
 
     angle = np.abs(np.arctan2((z1-z0),(r1-r0)))
     angle[angle>1.57079633] = 3.141592654 - angle[angle>1.57079633]
+    angle = np.nan_to_num(angle, 1.57079633)
 
     # FOR TESTING ONLY! MAY CONFLICT WITH ROS CALLBACK
     # plt.hist(degrees_angle)
@@ -95,8 +96,8 @@ def callback_ptcloud(ptcloud_data):
     ground_seperated_publisher.publish(msg)
 
     # Assumed ground takes account mostly of nearest ring. Perform Plane regression
+    pts = pts[~np.isnan(pts).any(axis=(2,1))]
     first_ring = pts[:, 0, :]
-    global a
     a = first_ring
 
 #------------------------------------------------------------------------------
