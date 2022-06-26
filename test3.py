@@ -8,7 +8,6 @@ Created on Fri May 27 00:56:26 2022
 
 # Fixing the OpenBLAS threading issue
 import os
-from cv2 import THRESH_OTSU
 os.environ["OPENBLAS_NUM_THREADS"] = "1" 
 
 #!/usr/bin/env python
@@ -66,13 +65,14 @@ def callback_ptcloud(ptcloud_data):
     r0 = r[:, 0:31]
     r1 = r[:, 1:32]
 
-    angle = np.arctan2((z1-z0),(r1-r0))
+    angle = np.abs(np.arctan2((z1-z0),(r1-r0)))
+    angle[angle>1.57079633] = angle[angle>1.57079633] - 1.57079633
 
     # FOR TESTING ONLY! MAY CONFLICT WITH ROS CALLBACK
     # plt.hist(degrees_angle)
     # plt.show()
 
-    mask_2d = np.bitwise_and(angle>min_angle, angle<max_angle)
+    mask_2d = angle>min_angle
     mask_3d = np.repeat(mask_2d.reshape(-1, 31, 1), 3, axis=2)
 
     # Ground removed
@@ -84,33 +84,12 @@ def callback_ptcloud(ptcloud_data):
 
     # Ground seperated
     ground = np.ma.where(np.bitwise_not(mask_3d), pts[:, 1:32, :], np.nan)
-    r = np.ma.where(np.bitwise_not(mask_3d), r[:, 1:32, :], np.nan)
-    
-    # --------------------------------
-    # tEsTiNG z0nE
-
-    # test_intensity = np.gradient(ground[:,:,2], axis=0) # Intra-ring
-    pts[:, :, 2] = savgol_filter(pts[:, :, 2], window_length=7, polyorder=5, axis=0)
-    
-    z0 = pts[1:, :, 2]
-    z1 = pts[:-1, :, 2]
-
-    r  = np.linalg.norm(pts[:, :, 0:2], axis=1)
-    r0 = r[1:, :]
-    r1 = r[:,-1, :]
-
-    angle = np.arctan2((z1-z0),(r1-r0))
-    np.clip(angle, a_min=0.01, a_max=0.5)
-    test_intensity = angle
-    # --------------------------------
-
-    msg = pts_np_to_pclmsg(ground, intensity=test_intensity)
+    msg = pts_np_to_pclmsg(ground, intensity=intensity)
     ground_seperated_publisher.publish(msg)
 
 #------------------------------------------------------------------------------
-OBSTACLE_SLOPE_ANGLE_RANGE = 1.91986218 # rad
-min_angle = 1.57079633 - OBSTACLE_SLOPE_ANGLE_RANGE/2
-max_angle = 1.57079633 + OBSTACLE_SLOPE_ANGLE_RANGE/2
+OBSTACLE_SLOPE_ANGLE_RANGE = 1.04719755  # rad
+min_angle = 1.57079633 - OBSTACLE_SLOPE_ANGLE_RANGE
 
 if (__name__ == "__main__"):
     try:

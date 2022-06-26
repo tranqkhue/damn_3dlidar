@@ -66,12 +66,13 @@ def callback_ptcloud(ptcloud_data):
     r1 = r[:, 1:32]
 
     angle = np.abs(np.arctan2((z1-z0),(r1-r0)))
+    angle[angle>1.57079633] = angle[angle>1.57079633] - 1.57079633
 
     # FOR TESTING ONLY! MAY CONFLICT WITH ROS CALLBACK
     # plt.hist(degrees_angle)
     # plt.show()
 
-    mask_2d = np.bitwise_and(angle>min_angle, angle<max_angle)
+    mask_2d = angle>min_angle
     mask_3d = np.repeat(mask_2d.reshape(-1, 31, 1), 3, axis=2)
 
     # Ground removed
@@ -87,9 +88,8 @@ def callback_ptcloud(ptcloud_data):
     ground_seperated_publisher.publish(msg)
 
 #------------------------------------------------------------------------------
-OBSTACLE_SLOPE_ANGLE_RANGE = 1.91986218 # rad
-min_angle = 1.57079633 - OBSTACLE_SLOPE_ANGLE_RANGE/2
-max_angle = 1.57079633 + OBSTACLE_SLOPE_ANGLE_RANGE/2
+OBSTACLE_SLOPE_ANGLE_RANGE = 1.04719755  # rad
+min_angle = 1.57079633 - OBSTACLE_SLOPE_ANGLE_RANGE
 
 if (__name__ == "__main__"):
     try:
