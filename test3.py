@@ -23,6 +23,9 @@ import rospy
 import ros_numpy # Convert ROS messages into Numpy array
 from sensor_msgs.msg import PointCloud2
 
+from sklearn.linear_model import LinearRegression, Ridge
+from scipy.spatial.transform import Rotation as R
+
 # import matplotlib.pyplot as plt
 
 #------------------------------------------------------------------------------
@@ -32,10 +35,16 @@ def pts_np_to_pclmsg(pts, frame="laser", intensity=255):
     d = np.dtype([('x', np.float32), ('y', np.float32), ('z', np.float32), 
                   ('intensity', np.float32)])
     struc_arr = np.zeros(pts.shape[0:-1], d)
-    struc_arr['x'] = pts[:,:,0]
-    struc_arr['y'] = pts[:,:,1]
-    struc_arr['z'] = pts[:,:,2]
-    struc_arr['intensity'] = intensity
+    try:
+        struc_arr['x'] = pts[:,:,0]
+        struc_arr['y'] = pts[:,:,1]
+        struc_arr['z'] = pts[:,:,2]
+        struc_arr['intensity'] = intensity
+    except IndexError: # For unorganized array
+        struc_arr['x'] = pts[:,0]
+        struc_arr['y'] = pts[:,1]
+        struc_arr['z'] = pts[:,2]
+        struc_arr['intensity'] = intensity
     
     msg = ros_numpy.msgify(PointCloud2, struc_arr, frame_id=frame)
 
@@ -74,7 +83,7 @@ def callback_ptcloud(ptcloud_data):
 
     angle = np.abs(np.arctan2((z1-z0),(r1-r0)))
     angle[angle>1.57079633] = 3.141592654 - angle[angle>1.57079633]
-    angle = np.nan_to_num(angle, 1.57079633)
+    angle = np.nan_to_num(angle, nan=0)
 
     # FOR TESTING ONLY! MAY CONFLICT WITH ROS CALLBACK
     # plt.hist(degrees_angle)
@@ -87,8 +96,8 @@ def callback_ptcloud(ptcloud_data):
     ground_removed = np.ma.where(mask_3d, pts[:, 1:32, :], np.nan)
     # intensity = data['intensity'][:, 1:32]
     intensity = angle
-    msg = pts_np_to_pclmsg(ground_removed, intensity=intensity)
-    ground_removed_publisher.publish(msg)
+    # msg = pts_np_to_pclmsg(ground_removed, intensity=intensity)
+    # ground_removed_publisher.publish(msg)
 
     # Ground seperated
     ground = np.ma.where(np.bitwise_not(mask_3d), pts[:, 1:32, :], np.nan)
@@ -96,12 +105,38 @@ def callback_ptcloud(ptcloud_data):
     ground_seperated_publisher.publish(msg)
 
     # Assumed ground takes account mostly of nearest ring. Perform Plane regression
-    pts = pts[~np.isnan(pts).any(axis=(2,1))]
     first_ring = pts[:, 0, :]
+    first_ring = first_ring[~np.isnan(first_ring).any(axis=1)]    
+    global a 
     a = first_ring
 
+    X = np.vstack((first_ring[:,0], first_ring[:,1])).reshape(-1, 2)
+    y = first_ring[:,2]
+
+    reg = Ridge().fit(X, y)
+    vec = np.array([reg.coef_[0], reg.coef_[1], 0])
+    r = R.from_rotvec(vec)
+    r_mat = r.as_matrix()
+
+    # TODO: multiply (m, n, 3) with (3, 3) transformation matrix without flatten (becoming unorganized pointcloud)!
+    pts_flatten = pts.reshape(-1, 3) 
+    global pts_transformed
+    pts_transformed =  np.matmul(pts_flatten, r_mat)
+    
+    h = reg.intercept_
+    HEIGHT_MIN = 0.6
+    HEIGHT_MAX = 0.3
+    mask_2d_min = (pts_transformed[:, 2]) > (h-HEIGHT_MIN)
+    mask_2d_max = (pts_transformed[:, 2]) < (h+HEIGHT_MAX)
+    mask_2d = np.bitwise_and(mask_2d_min, mask_2d_max)
+    ground = pts_transformed[mask_2d]
+
+    msg = pts_np_to_pclmsg(ground)
+    ground_removed_publisher.publish(msg)
+    
+
 #------------------------------------------------------------------------------
-OBSTACLE_SLOPE_ANGLE_RANGE = 1.04719755  # rad
+OBSTACLE_SLOPE_ANGLE_RANGE = 1.22173048  # rad
 min_angle = 1.57079633 - OBSTACLE_SLOPE_ANGLE_RANGE
 
 if (__name__ == "__main__"):
