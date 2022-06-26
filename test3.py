@@ -66,7 +66,7 @@ def callback_ptcloud(ptcloud_data):
     r1 = r[:, 1:32]
 
     angle = np.abs(np.arctan2((z1-z0),(r1-r0)))
-    angle[angle>1.57079633] = angle[angle>1.57079633] - 1.57079633
+    angle[angle>1.57079633] = 3.141592654 - angle[angle>1.57079633]
 
     # FOR TESTING ONLY! MAY CONFLICT WITH ROS CALLBACK
     # plt.hist(degrees_angle)
