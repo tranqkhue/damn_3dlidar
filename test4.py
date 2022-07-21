@@ -6,6 +6,7 @@
 
 # Fixing the OpenBLAS threading issue
 import os
+from re import A
 # For OpenBLAS
 os.environ["OPENBLAS_NUM_THREADS"] = "1" 
 # For Intel MKL
@@ -72,6 +73,10 @@ def callback_ptcloud(ptcloud_data):
     # pts = pts[~np.isnan(pts).any(axis=(2,1))]
 
     # Filter (smoothing) z value by column (or multiple ring in the same azimuth)
+    pts[:, :, 0] = savgol_filter(pts[:, :, 0], window_length=3, polyorder=1, axis=1)
+    pts[:, :, 1] = savgol_filter(pts[:, :, 1], window_length=3, polyorder=1, axis=1)
+    pts[:, :, 0] = scipy.ndimage.median_filter(pts[:, :, 0], size=(10,1))
+    pts[:, :, 1] = scipy.ndimage.median_filter(pts[:, :, 1], size=(10,1))
     pts[:, :, 2] = savgol_filter(pts[:, :, 2], window_length=5, polyorder=3, axis=1)
     
     z0 = pts[:, 0:31, 2]
@@ -104,33 +109,40 @@ def callback_ptcloud(ptcloud_data):
     msg = pts_np_to_pclmsg(ground, intensity=intensity)
     ground_seperated_publisher.publish(msg)
 
-    # Assumed ground takes account mostly of nearest ring. Perform Plane regression
-    first_ring = pts[:, 0, :]
-    first_ring = first_ring[~np.isnan(first_ring).any(axis=1)]    
+    HEIGHT_MIN = -1 - 0.8
+    HEIGHT_MAX = -1 + 0.5
+    mask_2d_min = (ground[:, :, 2]) > HEIGHT_MIN
+    mask_2d_max = (ground[:, :, 2]) < HEIGHT_MAX
+    mask_2d_2 = np.bitwise_and(mask_2d_min, mask_2d_max)
+    mask_3d_2 = np.repeat(mask_2d_2.reshape(-1, 31, 1), 3, axis=2)
+    ground_cropped = np.ma.where(mask_3d_2, ground[:, :, :], np.nan)
 
-    X = np.vstack((first_ring[:,0], first_ring[:,1])).reshape(-1, 2)
-    y = first_ring[:,2]
+    u = ground_cropped[1:, :, 0:3] - ground_cropped[:-1, :, 0:3]
+    v = ground_cropped[:-1, :, 0:3]
+    global t
+    t = np.cross(u, v)
 
-    reg = Ridge().fit(X, y)
-    vec = np.array([reg.coef_[0], reg.coef_[1], 0])
-    r = R.from_rotvec(vec)
-    r_mat = r.as_matrix()
-    r_mat = np.linalg.inv(r_mat)
+    # original_shape = t.shape
+    # r = R.from_rotvec(t.reshape(-1,3))
+    # # global angle2
+    # angle2 = r.as_euler('xyz', degrees=True).reshape(original_shape)
+    # angle2 = np.abs(np.nan_to_num(angle2))
+    # angle2_sum = np.sum(angle2, axis=2)
 
-    pts_flatten = pts.reshape(-1, 3) 
-    pts_transformed = np.matmul(pts, r_mat)
-    
-    h = reg.intercept_
-    HEIGHT_MIN = h-0.5
-    HEIGHT_MAX = h+0.3
-    print(HEIGHT_MIN, HEIGHT_MAX)
-    mask_2d_min = (pts_transformed[:, :, 2]) > HEIGHT_MIN
-    mask_2d_max = (pts_transformed[:, :, 2]) < HEIGHT_MAX
-    mask_2d = np.bitwise_and(mask_2d_min, mask_2d_min)
-    mask_3d = np.repeat(mask_2d.reshape(-1, 32, 1), 3, axis=2)
-    ground = pts_transformed[mask_2d]
+    t = t/np.repeat(np.linalg.norm(t, axis=2).reshape(t.shape[0], t.shape[1],  1), 3, axis=2)
+    angle2 = np.arccos(t[:,:,2])
+    # angle2[angle2>1.57079633] = angle2[angle2>1.57079633] - 1.57079633
+    angle2 = np.nan_to_num(angle2)
+    angle2 = np.abs(np.gradient(angle2)[1])
 
-    msg = pts_np_to_pclmsg(ground)
+    # mask_2d_min = angle2 < 1.55
+    # mask_2d_max = angle2 > 0.075
+    # mask_2d_3 = np.bitwise_and(mask_2d_min, mask_2d_max)
+    angle2[angle2 < 0.05] = -1
+
+    global a
+    a = angle2
+    msg = pts_np_to_pclmsg(ground_cropped[:-1, :, :], intensity=angle2)
     ground_seperated2_publisher.publish(msg)
     
 
