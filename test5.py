@@ -52,7 +52,7 @@ def pts_np_to_pclmsg(pts, frame="laser", intensity=255):
     return msg
 
 #------------------------------------------------------------------------------
-last_height_z = 0
+last_height_z_ground = 0
 def callback_ptcloud(ptcloud_data):
     data = ros_numpy.numpify(ptcloud_data)
     pts  = np.array([data['x'], data['y'], data['z']])
@@ -92,7 +92,7 @@ def callback_ptcloud(ptcloud_data):
     ground_z = ground_z[~np.isnan(ground_z)]
     hist_z = np.histogram(ground_z, bins=30)
     # Filter value smaller than zero (assume lidar is up-side down)
-    hist_z[0][np.where(hist_z[1]<0)[0]-1] = -9999
+    hist_z[0][np.where(hist_z[1]<0)[0]-1] = 9999
     # Find the most dominant height 
     height_z = hist_z[1][np.argmax(hist_z[0])]
     global last_height_z_ground
@@ -124,9 +124,15 @@ def callback_ptcloud(ptcloud_data):
     mask_3d = np.repeat(mask_2d.reshape(-1, 32, 1), 3, axis=2)
     ceiling_height_filtered = np.where(mask_3d, ground_removed[:, :, :], np.nan)
 
-    no_nan = np.nan_to_num(ceiling_height_filtered, nan=9999)
-    z_grad_intraring = np.abs(np.gradient(no_nan[:,:,2], axis=0))
-    mask_2d = (z_grad_intraring>999)
+    no_nan = ceiling_height_filtered
+    no_nan[:,:,0] = np.nan_to_num(no_nan[:,:,0], nan=9999)
+    no_nan[:,:,1] = np.nan_to_num(no_nan[:,:,1], nan=9999)
+    # no_nan[:,:,2] = np.nan_to_num(no_nan[:,:,2], nan=9999)
+    # z_grad_intraring = np.abs(np.gradient(no_nan[:,:,2], axis=0))
+ 
+    r_no_nan = np.linalg.norm(no_nan[:,:,0:2], axis=2)
+    grad_intraring = np.abs(np.gradient(r_no_nan, axis=0))
+    mask_2d = (grad_intraring>999)
     ceiling_mask = mask_2d
     mask_3d = np.repeat(mask_2d.reshape(-1, 32, 1), 3, axis=2)
     ceiling_intersect = np.where(mask_3d, no_nan[:, :, :], np.nan)
